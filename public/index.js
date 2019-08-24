@@ -162,37 +162,46 @@ window.vue = new Vue({
         },
         openFile: function() {
             var that = this;
-            that.sending = true;
             window.openFile(function(file) {
                 if (file === undefined) {
-                    that.sending = false;
                     return;
                 }
-                uploadFile(file, function(result) {
-                    var fileid = result.fileid;
-                    var filename = result.filename;
-                    var senddata = {
-                        type: "message",
-                        msgtype: "file",
-                        msgdata: {
-                            fileid: fileid,
-                            filename: filename
-                        }
-                    };
-                    ws.sendJson(senddata, function(success) {
-                        if (success) {
-                            that.appendMessage({
-                                sender: that.username,
-                                direction: "out",
-                                type: senddata.msgtype,
-                                data: senddata.msgdata
-                            });
-                        }
-                        that.sending = false;
-                    });
-                }, function() {
+                that.sendFile(file);
+            });
+        },
+        dropFile: function(event) {
+            event.preventDefault();
+            console.log("drop", event);
+        },
+        sendFile: function(file) {
+            var that = this;
+            if (!that.inroom) return;
+            if (that.sending) return;
+            that.sending = true;
+            uploadFile(file, function(result) {
+                var fileid = result.fileid;
+                var filename = result.filename;
+                var senddata = {
+                    type: "message",
+                    msgtype: "file",
+                    msgdata: {
+                        fileid: fileid,
+                        filename: filename
+                    }
+                };
+                ws.sendJson(senddata, function(success) {
+                    if (success) {
+                        that.appendMessage({
+                            sender: that.username,
+                            direction: "out",
+                            type: senddata.msgtype,
+                            data: senddata.msgdata
+                        });
+                    }
                     that.sending = false;
                 });
+            }, function() {
+                that.sending = false;
             });
         }
     },
@@ -352,6 +361,18 @@ window.uploadFile = function(file, success, failed, always) {
     .always(function() {
         if (always) always();
     });
+};
+
+document.ondragover = function(event) {
+    event.preventDefault();
+};
+document.ondrop = function(event) {
+    event.preventDefault();
+    var file = event.dataTransfer.files[0];
+    if (file === undefined) {
+        return;
+    }
+    vue.sendFile(file);
 };
 
 });

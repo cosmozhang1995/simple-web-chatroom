@@ -202,7 +202,7 @@ setInterval(function() {
             fs.unlinkSync(filepath);
         }
     }
-}, 1000);
+}, 60 * 1000);
 
 // app.listen(port, () => console.log(`Web server listening on port ${port}!`));
 server.listen({ port: port }, () => console.log(`Web server listening on port ${port}!`));
