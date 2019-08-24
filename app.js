@@ -62,7 +62,7 @@ wsServer.on("request", function(request) {
         } else {
             var roomid;
             while (true) {
-                roomid = parseInt(Math.max(Math.floor(Math.random() * 10000), 10000));
+                roomid = parseInt(Math.min(Math.floor(Math.random() * 10000), 9999));
                 if (rooms[roomid] === undefined) break;
             }
             room = {

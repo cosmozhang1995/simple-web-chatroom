@@ -63,7 +63,10 @@ window.vue = new Vue({
         sending: false,
         inroom: false,
         m_username: "",
-        m_roomid: ""
+        m_roomid: "",
+        sending: false,
+        joining: false,
+        quiting: false
     },
     created: function() {
         var that = this;
@@ -84,6 +87,7 @@ window.vue = new Vue({
         },
         joinOrCreateRoom: function() {
             var that = this;
+            if (this.joining) return;
             if (this.inroom) return;
             var roomid = this.roomid;
             var username = this.username;
@@ -92,6 +96,7 @@ window.vue = new Vue({
                 return;
             }
             if (roomid.length > 0) {
+                that.joining = true;
                 ws.sendJson({
                     type: "join",
                     username: username,
@@ -102,8 +107,10 @@ window.vue = new Vue({
                     } else {
                         alertDialog("Failed", "Failed to join room " + roomid);
                     }
+                    that.joining = false;
                 });
             } else {
+                that.joining = true;
                 ws.sendJson({
                     type: "create",
                     username: username
@@ -114,20 +121,64 @@ window.vue = new Vue({
                     } else {
                         alertDialog("Failed", "Failed to join room " + roomid);
                     }
+                    that.joining = false;
                 });
             }
         },
         quitRoom: function() {
+            var that = this;
+            if (this.quiting) return;
+            if (this.inroom) {
+                this.quiting = true;
+                ws.sendJson({
+                    type: "quit"
+                }, function(result) {
+                    if (result) {
+                        that.inroom = false;
+                    } else {
+                        alertDialog("Failed", "Failed to quit room");
+                    }
+                    that.quiting = false;
+                });
+            }
         },
         sendMessage: function() {
             var text = this.editing;
             if (text.length == 0) return;
+            if (!this.inroom) return;
+            this.sending = true;
+            var that = this;
+            ws.sendJson({
+                type: "message",
+                message: text
+            }, function(result) {
+                if (result) {
+                    that.editing = "";
+                    that.sending = false;
+                    that.appendMessage({
+                        sender: that.username,
+                        type: "out",
+                        content: text
+                    });
+                } else {
+                }
+            })
         }
     },
     computed: {
         joinButtonText: function() {
-            if (this.roomid.length == 0) return "Create";
-            else return "Join";
+            if (this.roomid.length == 0) {
+                if (this.joining)
+                    return "Creating ...";
+                else
+                    return "Create";
+            }
+            else {
+                if (this.joining)
+                    return "Joining ...";
+                else
+                    return "Join";
+            }
         },
         username: {
             set: function(value) {
@@ -165,9 +216,9 @@ window.WebSocketClient = function(url) {
     this._sendings = [];
     this.ws.onmessage = function(event) {
         var data = event.data;
-        if (data instanceof String) {
+        if (typeof data === "string") {
             data = JSON.parse(data);
-            this.trigger("message", data);
+            that.trigger("message", data);
         } else if (data instanceof Blob) {
         }
     };
@@ -177,9 +228,12 @@ window.WebSocketClient = function(url) {
     this.on("message", function(data) {
         if (data.type === "ack") {
             if (typeof data.seq === "number") {
-                var cb = this._sendings[data.seq];
+                var req = this._sendings[data.seq];
                 this._sendings[data.seq] = undefined;
-                cb.apply(this, [data.success, data]);
+                if (req) {
+                    req = req.callback;
+                    req.apply(this, [data.success, data]);
+                }
             }
         }
     });
@@ -205,6 +259,9 @@ WebSocketClient.prototype.sendJson = function(json, callback, timeout) {
     this._seq += 1;
     var senddata = JSON.stringify($.extend({}, json, {seq: seq}));
     this.ws.send(senddata);
+    this._sendings[seq] = {
+        callback: callback
+    };
     var that = this;
     if (typeof timeout === "number" && timeout > 0) {
         setTimeout(function() {
@@ -221,15 +278,12 @@ WebSocketClient.prototype.sendText = function(text, callback, timeout) {
 
 window.ws = new WebSocketClient("ws://" + window.location.host);
 ws.on("message", function(message) {
-    if (message instanceof String) {
-        message = JSON.parse(message);
-        if (message.type == "message") {
-            vue.appendMessage({
-                sender: message.sender,
-                type: "in",
-                content: message.message
-            });
-        }
+    if (message.type == "message") {
+        vue.appendMessage({
+            sender: message.sender,
+            type: "in",
+            content: message.message
+        });
     }
 });
 

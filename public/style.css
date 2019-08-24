@@ -104,6 +104,9 @@ html, body, .app-container {
     flex-shrink: 0;
     margin: 0;
 }
+.fake-input {
+    color: #999;
+}
 .fake-input,
 .input-group input[type="text"],
 .input-group input[type="number"],
