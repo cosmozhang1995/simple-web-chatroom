@@ -83,7 +83,14 @@
             </div>
             <div class="horizontal-line"></div>
             <div class="edit-box" v-bind:class="{ activated: editfocus }">
-                <div class="edit-toolbar"></div>
+                <div class="edit-toolbar">
+                    <a class="edit-toolitem" href="javascript:;">
+                        <img src="/static/icon-image.png" />
+                    </a>
+                    <a class="edit-toolitem" href="javascript:;" @click="openFile">
+                        <img src="/static/icon-file.png" />
+                    </a>
+                </div>
                 <textarea v-model="editing" class="edit-input" @focus="editfocus = true" @blur="editfocus = false"></textarea>
                 <div class="edit-footbar">
                     <a class="btn btn-primary" v-bind:class="{ disabled: !inroom || editing.length == 0 || sending }" href="javascript:;" @click="sendMessage" v-text="sending ? 'Sending ...' : 'Send'" style="min-width: 100px"></a>
@@ -125,6 +132,9 @@
                 </div>
             </div>
         </div>
+    </div>
+    <div style="height: 0">
+        <input id="file-selector" type="file" />
     </div>
     <script type="text/javascript" src="/vendor/jquery/dist/jquery.min.js"></script>
     <script type="text/javascript" src="/vendor/lodash/lodash.min.js"></script>

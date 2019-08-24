@@ -1,28 +1,5 @@
 $(function() {
 
-var fake_data = function (vue) {
-    // for (var i = 0; i < 3; i++) {
-    //     vue.appendMessage({
-    //         sender: "Cosmo",
-    //         type: "in",
-    //         content: "Use Bootstrap’s custom button styles for actions in forms, dialogs, and more with support for multiple sizes, states, and more."
-    //     });
-    //     vue.appendMessage({
-    //         sender: "Cosmo",
-    //         type: "in",
-    //         content: "Use Bootstrap’s custom button styles for actions in forms, dialogs, and more with support for multiple sizes, states, and more."
-    //     });
-    //     vue.appendMessage({
-    //         sender: "Cosmo",
-    //         type: "out",
-    //         content: "Use Bootstrap’s custom button styles for actions in forms, dialogs, and more with support for multiple sizes, states, and more."
-    //     });
-    // }
-    // for (var i = 0; i < 9; i++)
-    //     vue.editing += "Use Bootstrap’s custom button styles for actions in forms, dialogs, and more with support for multiple sizes, states, and more.";
-
-};
-
 function alertDialog(title, text) {
     $("#modal-alert-title").text(title);
     $("#modal-alert-text").text(text);
@@ -39,9 +16,20 @@ function confirmDialog(title, text, callback) {
 var $messageElTemplate = $($(".message-item")[0]).detach().clone().removeClass("template");
 var messageEl = function (message) {
     $el = $messageElTemplate.clone();
-    $el.find(".message-row").addClass(message.type == "out" ? "right" : "left");
+    $el.find(".message-row").addClass(message.direction == "out" ? "right" : "left");
     $el.find(".message-sender").text(message.sender);
-    $el.find(".message-bubble").text(message.content);
+    var $bubbleEl = $el.find(".message-bubble");
+    if (message.type == "text") {
+        $bubbleEl.text(message.data).addClass("text");
+    } else if (message.type == "file") {
+        var $fileitemEl = $("<div></div>").addClass("message-bubble-file");
+        $("<div></div>").addClass("icon").appendTo($fileitemEl);
+        $("<div></div>").addClass("filename").text(message.data.filename).appendTo($fileitemEl);
+        $fileitemEl.appendTo($bubbleEl);
+        $bubbleEl.on("click", function() {
+            window.open("/download?fileid=" + message.data.fileid + "&filename=" + message.data.filename);
+        });
+    }
     return $el;
 };
 
@@ -74,7 +62,6 @@ window.vue = new Vue({
         setTimeout(function() {
             $messageListBoxEl = $(".message-list-box");
             $messageListEl = $(".message-list");
-            fake_data(that);
         }, 0);
         that.username = window.localStorage.username || "";
     },
@@ -157,19 +144,56 @@ window.vue = new Vue({
             var that = this;
             ws.sendJson({
                 type: "message",
-                message: text
+                msgtype: "text",
+                msgdata: text
             }, function(result) {
                 if (result) {
                     that.editing = "";
                     that.sending = false;
                     that.appendMessage({
                         sender: that.username,
-                        type: "out",
-                        content: text
+                        direction: "out",
+                        type: "text",
+                        data: text
                     });
                 } else {
                 }
             })
+        },
+        openFile: function() {
+            var that = this;
+            that.sending = true;
+            window.openFile(function(file) {
+                if (file === undefined) {
+                    that.sending = false;
+                    return;
+                }
+                uploadFile(file, function(result) {
+                    var fileid = result.fileid;
+                    var filename = result.filename;
+                    var senddata = {
+                        type: "message",
+                        msgtype: "file",
+                        msgdata: {
+                            fileid: fileid,
+                            filename: filename
+                        }
+                    };
+                    ws.sendJson(senddata, function(success) {
+                        if (success) {
+                            that.appendMessage({
+                                sender: that.username,
+                                direction: "out",
+                                type: senddata.msgtype,
+                                data: senddata.msgdata
+                            });
+                        }
+                        that.sending = false;
+                    });
+                }, function() {
+                    that.sending = false;
+                });
+            });
         }
     },
     computed: {
@@ -288,10 +312,46 @@ ws.on("message", function(message) {
     if (message.type == "message") {
         vue.appendMessage({
             sender: message.sender,
-            type: "in",
-            content: message.message
+            direction: "in",
+            type: message.msgtype,
+            data: message.msgdata
         });
     }
 });
+
+var $fileSelectorElement = $("#file-selector");
+window.openFile = function(callback) {
+    $fileSelectorElement.trigger("click");
+    $fileSelectorElement.one("change", function() {
+        var file = $fileSelectorElement[0].files[0];
+        $fileSelectorElement.val("");
+        if (callback) callback(file);
+    });
+};
+
+window.uploadFile = function(file, success, failed, always) {
+    var form = new FormData();
+    form.append("file", file);
+    return $.ajax({
+        url: "upload",
+        type: "post",
+        data: form,
+        processData: false,
+        contentType: false
+    })
+    .done(function(data) {
+        if (data.success) {
+            if (success) success(data);
+        } else {
+            if (failed) failed(data);
+        }
+    })
+    .fail(function(event) {
+        if (failed) failed(event);
+    })
+    .always(function() {
+        if (always) always();
+    });
+};
 
 });
