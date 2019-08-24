@@ -18,14 +18,14 @@
                     <div class="grid-col" style="width: 40%">
                         <div class="input-group">
                             <label>Your Name</label>
-                            <input type="text" v-model="username" v-show="!inroom"/>
+                            <input type="text" v-model="username" v-show="!inroom" v-bind:disabled="joining"/>
                             <div class="fake-input" v-text="username" v-show="inroom"></div>
                         </div>
                     </div>
                     <div class="grid-col" style="width: 40%">
                         <div class="input-group">
                             <label>Room ID</label>
-                            <input type="tel" v-model="roomid" v-show="!inroom" />
+                            <input type="tel" v-model="roomid" v-show="!inroom" v-bind:disabled="joining"/>
                             <div class="fake-input" v-text="roomid" v-show="inroom"></div>
                         </div>
                     </div>
@@ -42,7 +42,7 @@
                     <div class="grid-col" style="width: 100%">
                         <div class="input-group">
                             <label style="width: 120px">Your Name</label>
-                            <input type="text" v-model="username" v-show="!inroom"/>
+                            <input type="text" v-model="username" v-show="!inroom" v-bind:disabled="joining"/>
                             <div class="fake-input" v-text="username" v-show="inroom"></div>
                         </div>
                     </div>
@@ -52,7 +52,7 @@
                     <div class="grid-col" style="width: 100%">
                         <div class="input-group">
                             <label style="width: 120px">Room ID</label>
-                            <input type="tel" v-model="roomid" v-show="!inroom" />
+                            <input type="tel" v-model="roomid" v-show="!inroom" v-bind:disabled="joining"/>
                             <div class="fake-input" v-text="roomid" v-show="inroom"></div>
                         </div>
                     </div>
@@ -82,9 +82,9 @@
                 </div>
             </div>
             <div class="horizontal-line"></div>
-            <div class="edit-box activated">
+            <div class="edit-box" v-bind:class="{ activated: editfocus }">
                 <div class="edit-toolbar"></div>
-                <textarea v-model="editing" class="edit-input"></textarea>
+                <textarea v-model="editing" class="edit-input" @focus="editfocus = true" @blur="editfocus = false"></textarea>
                 <div class="edit-footbar">
                     <a class="btn btn-primary" v-bind:class="{ disabled: !inroom || editing.length == 0 || sending }" href="javascript:;" @click="sendMessage" v-text="sending ? 'Sending ...' : 'Send'" style="min-width: 100px"></a>
                 </div>

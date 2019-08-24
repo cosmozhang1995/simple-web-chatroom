@@ -66,7 +66,8 @@ window.vue = new Vue({
         m_roomid: "",
         sending: false,
         joining: false,
-        quiting: false
+        quiting: false,
+        editfocus: false
     },
     created: function() {
         var that = this;
@@ -75,6 +76,7 @@ window.vue = new Vue({
             $messageListEl = $(".message-list");
             fake_data(that);
         }, 0);
+        that.username = window.localStorage.username || "";
     },
     methods: {
         appendMessage: function(message) {
@@ -104,6 +106,8 @@ window.vue = new Vue({
                 }, function(result) {
                     if (result) {
                         that.inroom = true;
+                        window.localStorage.username = username;
+                        document.title = "Chatroom #" + roomid;
                     } else {
                         alertDialog("Failed", "Failed to join room " + roomid);
                     }
@@ -118,6 +122,8 @@ window.vue = new Vue({
                     if (result) {
                         that.inroom = true;
                         that.roomid = data.roomid;
+                        window.localStorage.username = username;
+                        document.title = "Chatroom #" + that.roomid;
                     } else {
                         alertDialog("Failed", "Failed to join room " + roomid);
                     }
@@ -135,6 +141,7 @@ window.vue = new Vue({
                 }, function(result) {
                     if (result) {
                         that.inroom = false;
+                        document.title = "Chatroom";
                     } else {
                         alertDialog("Failed", "Failed to quit room");
                     }
