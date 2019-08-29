@@ -213,6 +213,7 @@ html, body, .app-container {
     border-radius: 8px;
     color: white;
     cursor: pointer;
+    max-width: 100%;
 }
 .message-bubble.text {
     cursor: initial;
@@ -262,6 +263,13 @@ html, body, .app-container {
     flex-shrink: 1;
     flex-grow: 1;
     text-overflow: ellipsis;
+    width: 100%;
+    overflow: hidden;
+}
+
+.message-bubble-image {
+    max-width: 300px;
+    height: auto;
 }
 
 .edit-box {

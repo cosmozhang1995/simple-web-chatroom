@@ -1,5 +1,15 @@
 $(function() {
 
+var fnText = $.fn.text;
+$.fn.text = function(val) {
+    if (val === undefined) {
+        return fnText.apply(this, arguments);
+    } else {
+        fnText.apply(this, arguments);
+        return this.html(this.html().replace(/\n/g, '<br/>'));
+    }
+};
+
 function alertDialog(title, text) {
     $("#modal-alert-title").text(title);
     $("#modal-alert-text").text(text);
@@ -22,12 +32,19 @@ var messageEl = function (message) {
     if (message.type == "text") {
         $bubbleEl.text(message.data).addClass("text");
     } else if (message.type == "file") {
-        var $fileitemEl = $("<div></div>").addClass("message-bubble-file");
-        $("<div></div>").addClass("icon").appendTo($fileitemEl);
-        $("<div></div>").addClass("filename").text(message.data.filename).appendTo($fileitemEl);
-        $fileitemEl.appendTo($bubbleEl);
+        var mimetype = message.data.mimetype.split("/");
+        var fileurl = "/file?fileid=" + message.data.fileid + "&filename=" + message.data.filename;
+        if (mimetype[0] == "image") {
+            var $imageitemEl = $("<img></img>").addClass("message-bubble-image").attr("src", fileurl);
+            $imageitemEl.appendTo($bubbleEl);
+        } else {
+            var $fileitemEl = $("<div></div>").addClass("message-bubble-file");
+            $("<div></div>").addClass("icon").appendTo($fileitemEl);
+            $("<div></div>").addClass("filename").text(message.data.filename).appendTo($fileitemEl);
+            $fileitemEl.appendTo($bubbleEl);
+        }
         $bubbleEl.on("click", function() {
-            window.open("/download?fileid=" + message.data.fileid + "&filename=" + message.data.filename);
+            window.open(fileurl);
         });
     }
     return $el;
@@ -48,11 +65,10 @@ window.vue = new Vue({
         app_ready: false,
         messages: [],
         editing: "",
-        sending: false,
         inroom: false,
         m_username: "",
         m_roomid: "",
-        sending: false,
+        sendings: [],
         joining: false,
         quiting: false,
         editfocus: false
@@ -73,6 +89,9 @@ window.vue = new Vue({
         prependMessage: function(message) {
             $messageListEl.prepend(messageEl(message));
             $messageListBoxEl.scrollTop($messageListEl.height());
+        },
+        clearMessages: function(message) {
+            $messageListEl.children().remove();
         },
         joinOrCreateRoom: function() {
             var that = this;
@@ -127,6 +146,7 @@ window.vue = new Vue({
                     type: "quit"
                 }, function(result) {
                     if (result) {
+                        that.clearMessages();
                         that.inroom = false;
                         document.title = "Chatroom";
                     } else {
@@ -140,16 +160,15 @@ window.vue = new Vue({
             var text = this.editing;
             if (text.length == 0) return;
             if (!this.inroom) return;
-            this.sending = true;
             var that = this;
-            ws.sendJson({
+            var request = ws.sendJson({
                 type: "message",
                 msgtype: "text",
                 msgdata: text
             }, function(result) {
                 if (result) {
                     that.editing = "";
-                    that.sending = false;
+                    that.sendings = _.filter(that.sendings, (item) => item != request);
                     that.appendMessage({
                         sender: that.username,
                         direction: "out",
@@ -158,7 +177,19 @@ window.vue = new Vue({
                     });
                 } else {
                 }
-            })
+            });
+            this.sendings.push(request);
+        },
+        openImage: function() {
+            var that = this;
+            window.openFile({
+                accept: "image/*"
+            }, function(file) {
+                if (file === undefined) {
+                    return;
+                }
+                that.sendFile(file);
+            });
         },
         openFile: function() {
             var that = this;
@@ -169,27 +200,23 @@ window.vue = new Vue({
                 that.sendFile(file);
             });
         },
-        dropFile: function(event) {
-            event.preventDefault();
-            console.log("drop", event);
-        },
         sendFile: function(file) {
             var that = this;
             if (!that.inroom) return;
-            if (that.sending) return;
-            that.sending = true;
-            uploadFile(file, function(result) {
+            uploadFile(that.roomid, file, function(result) {
                 var fileid = result.fileid;
                 var filename = result.filename;
+                var mimetype = result.mimetype;
                 var senddata = {
                     type: "message",
                     msgtype: "file",
                     msgdata: {
                         fileid: fileid,
-                        filename: filename
+                        filename: filename,
+                        mimetype: mimetype
                     }
                 };
-                ws.sendJson(senddata, function(success) {
+                var request = ws.sendJson(senddata, function(success) {
                     if (success) {
                         that.appendMessage({
                             sender: that.username,
@@ -198,10 +225,10 @@ window.vue = new Vue({
                             data: senddata.msgdata
                         });
                     }
-                    that.sending = false;
+                    that.sendings = _.filter(that.sendings, (item) => item != request);
                 });
+                that.sendings.push(request);
             }, function() {
-                that.sending = false;
             });
         }
     },
@@ -242,6 +269,9 @@ window.vue = new Vue({
         sendButtonDisabled: function() {
             if (this.sending) return true;
             return false;
+        },
+        sending: function() {
+            return this.sendings.length > 0;
         }
     }
 });
@@ -308,6 +338,9 @@ WebSocketClient.prototype.sendJson = function(json, callback, timeout) {
             that._sendings[seq] = undefined;
         }, timeout);
     }
+    return {
+        seq: seq
+    };
 };
 WebSocketClient.prototype.sendText = function(text, callback, timeout) {
     return this.sendJson({
@@ -329,20 +362,27 @@ ws.on("message", function(message) {
 });
 
 var $fileSelectorElement = $("#file-selector");
-window.openFile = function(callback) {
+window.openFile = function(options, callback) {
+    if (typeof options === "function") {
+        callback = options;
+        options = {};
+    }
+    options = options || {};
+    if (options.accept) $fileSelectorElement.attr("accept", options.accept);
     $fileSelectorElement.trigger("click");
     $fileSelectorElement.one("change", function() {
         var file = $fileSelectorElement[0].files[0];
         $fileSelectorElement.val("");
+        $fileSelectorElement.attr("accept", null);
         if (callback) callback(file);
     });
 };
 
-window.uploadFile = function(file, success, failed, always) {
+window.uploadFile = function(roomid, file, success, failed, always) {
     var form = new FormData();
     form.append("file", file);
     return $.ajax({
-        url: "upload",
+        url: "upload?roomid=" + roomid,
         type: "post",
         data: form,
         processData: false,
@@ -368,11 +408,10 @@ document.ondragover = function(event) {
 };
 document.ondrop = function(event) {
     event.preventDefault();
-    var file = event.dataTransfer.files[0];
-    if (file === undefined) {
-        return;
-    }
-    vue.sendFile(file);
+    var files = event.dataTransfer.files;
+    if (files.length == 0) return;
+    for (file of files)
+        vue.sendFile(file);
 };
 
 });

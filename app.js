@@ -21,6 +21,18 @@ for (var i = 0; i < process.argv.length; i++) {
     }
 }
 
+function removeDirectorySync(dirpath) {
+    var stat = fs.statSync(dirpath);
+    if (stat.isFile()) {
+        fs.unlinkSync(dirpath);
+    } else if (stat.isDirectory()) {
+        for (item of fs.readdirSync(dirpath)) {
+            removeDirectorySync(path.join(dirpath, item));
+        }
+        fs.rmdirSync(dirpath);
+    }
+};
+
 const _ = require("lodash");
 const express = require('express');
 const app = express();
@@ -31,6 +43,14 @@ const wsServer = new WebSocketServer({
     autoAcceptConnections: false
 });
 const uuid = require("node-uuid");
+const mime = require("mime");
+
+var rooms = [];
+
+function roomIdString(roomid) {
+    roomid = parseInt(roomid);
+    return _.padStart("" + roomid, 4, "0");
+};
 
 if (!fs.existsSync(userfile_directory)) fs.mkdirSync(userfile_directory);
 
@@ -46,12 +66,25 @@ app.use(express.static('public'));
 const upload = require('multer')({ dest: userfile_directory });
 
 app.post('/upload', upload.single("file"), function(req, res, next) {
-    res.json({
-        success: true,
-        filename: req.file.originalname,
-        mimetype: req.file.mimetype,
-        fileid: req.file.filename
-    });
+    var roomid = parseInt(req.query.roomid);
+    if (!rooms[roomid]) {
+        fs.unlinkSync(path.join(userfile_directory, req.file.filename));
+        res.json({
+            success: false
+        });
+    }
+    else {
+        var roomidstr = roomIdString(roomid);
+        var roomdirname = path.join(userfile_directory, roomidstr);
+        if (!fs.existsSync(roomdirname)) fs.mkdirSync(roomdirname);
+        fs.renameSync(path.join(userfile_directory, req.file.filename), path.join(roomdirname, req.file.filename));
+        res.json({
+            success: true,
+            filename: req.file.originalname,
+            mimetype: req.file.mimetype,
+            fileid: roomidstr + "/" + req.file.filename
+        });
+    }
 });
 
 app.get('/download', function(req, res, next) {
@@ -63,7 +96,22 @@ app.get('/download', function(req, res, next) {
     }
 });
 
-var rooms = [];
+app.get('/file', function(req, res, next) {
+    var filepath = path.join(userfile_directory, req.query.fileid);
+    var filename = req.query.filename || "";
+    if (fs.existsSync(filepath)) {
+        var mimetype = mime.lookup(filename);
+        var buffer = fs.readFileSync(filepath);
+        res
+        .status(200)
+        .append("Content-Type", mimetype)
+        .append("Content-Length", buffer.length)
+        .append("Content-Disposition", "inline; filename=" + filename)
+        .send(buffer);
+    } else {
+        res.status(404).send("Cannot download this file.");
+    }
+});
 
 wsServer.on("request", function(request) {
     var conn = request.accept();
@@ -108,7 +156,7 @@ wsServer.on("request", function(request) {
                 if (rooms[roomid] === undefined) break;
             }
             room = {
-                id: _.padStart("" + roomid, 4, "0"),
+                id: roomIdString(roomid),
                 users: [conn]
             };
             rooms[roomid] = room;
@@ -152,6 +200,8 @@ wsServer.on("request", function(request) {
         if (room) {
             _.remove(room.users, (x) => x == conn);
             if (room.users.length == 0) rooms[parseInt(room.id)] = undefined;
+            var roomdirname = path.join(userfile_directory, roomIdString(room.id));
+            if (fs.existsSync(roomdirname)) removeDirectorySync(roomdirname);
             room = undefined;
             username = undefined;
             if (message) {
@@ -192,17 +242,27 @@ wsServer.on("request", function(request) {
     });
 });
 
-setInterval(function() {
-    var nowts = new Date().getTime();
-    var expirets = userfile_expire * 1000;
-    for (var filename of fs.readdirSync(userfile_directory)) {
-        var filepath = path.join(userfile_directory, filename);
-        var stat = fs.statSync(filepath);
-        if ((nowts - stat.ctime.getTime()) > expirets) {
-            fs.unlinkSync(filepath);
-        }
-    }
-}, 60 * 1000);
+// setInterval(function() {
+//     var nowts = new Date().getTime();
+//     var expirets = userfile_expire * 1000;
+//     for (var filename of fs.readdirSync(userfile_directory)) {
+//         var filepath = path.join(userfile_directory, filename);
+//         var stat = fs.statSync(filepath);
+//         if ((nowts - stat.ctime.getTime()) > expirets) {
+//             fs.unlinkSync(filepath);
+//         }
+//     }
+// }, 60 * 1000);
 
 // app.listen(port, () => console.log(`Web server listening on port ${port}!`));
-server.listen({ port: port }, () => console.log(`Web server listening on port ${port}!`));
+server.listen({ port: port }, function () {
+    removeDirectorySync(userfile_directory);
+    fs.mkdirSync(userfile_directory);
+    console.log(`Web server listening on port ${port}!`);
+});
+
+server.on("close", function() {
+    removeDirectorySync(userfile_directory);
+    console.log("Web server has closed.");
+})
+

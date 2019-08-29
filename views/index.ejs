@@ -84,7 +84,7 @@
             <div class="horizontal-line"></div>
             <div class="edit-box" v-bind:class="{ activated: editfocus }">
                 <div class="edit-toolbar">
-                    <a class="edit-toolitem" href="javascript:;">
+                    <a class="edit-toolitem" href="javascript:;" @click="openImage">
                         <img src="/static/icon-image.png" />
                     </a>
                     <a class="edit-toolitem" href="javascript:;" @click="openFile">
