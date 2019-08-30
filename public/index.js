@@ -1,13 +1,25 @@
 $(function() {
 
-var fnText = $.fn.text;
-$.fn.text = function(val) {
-    if (val === undefined) {
-        return fnText.apply(this, arguments);
-    } else {
-        fnText.apply(this, arguments);
-        return this.html(this.html().replace(/\n/g, '<br/>'));
-    }
+// var fnText = $.fn.text;
+// $.fn.text = function(val) {
+//     if (val === undefined) {
+//         return fnText.apply(this, arguments);
+//     } else {
+//         fnText.apply(this, arguments);
+//         return this.html(this.html().replace(/\n/g, '<br/>'));
+//     }
+// };
+
+$.fn.safeHtml = function(htmltext) {
+    htmltext = htmltext
+        .replace(/\&/g, "&amp;")
+        .replace(/\</g, "&lt;")
+        .replace(/\>/g, "&gt;")
+        .replace(/\x20/g, "&nbsp;")
+        .replace(/\"/g, "&quot;")
+        .replace(/\r\n/g, "<br/>")
+        .replace(/\n/g, "<br/>");
+    return this.html(htmltext);
 };
 
 function alertDialog(title, text) {
@@ -30,7 +42,7 @@ var messageEl = function (message) {
     $el.find(".message-sender").text(message.sender);
     var $bubbleEl = $el.find(".message-bubble");
     if (message.type == "text") {
-        $bubbleEl.text(message.data).addClass("text");
+        $bubbleEl.safeHtml(message.data).addClass("text");
     } else if (message.type == "file") {
         var mimetype = message.data.mimetype.split("/");
         var fileurl = "/file?fileid=" + message.data.fileid + "&filename=" + message.data.filename;
@@ -413,5 +425,15 @@ document.ondrop = function(event) {
     for (file of files)
         vue.sendFile(file);
 };
+
+$(".edit-input").on("keyup", function(event) {
+    if (event.keyCode == 13 && (event.ctrlKey || event.metaKey)) {
+        $(this).trigger("done", arguments);
+    }
+});
+
+$(".edit-input").on("done", function() {
+    vue.sendMessage();
+});
 
 });
